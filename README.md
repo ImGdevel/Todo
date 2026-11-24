@@ -12,8 +12,8 @@
 
 [Releases](https://github.com/ImGdevel/Todo/releases)에서 받는다.
 
-- Windows: `Corner Todo Setup x.y.z.exe`(설치) 또는 `Corner Todo x.y.z.exe`(포터블)
-- macOS: `Corner Todo-x.y.z.dmg` (Intel: x64, Apple Silicon: arm64)
+- Windows: `Corner-Todo-Setup-x.y.z.exe`(설치) 또는 `Corner-Todo-x.y.z.exe`(포터블)
+- macOS: `Corner-Todo-x.y.z-arm64.dmg`(Apple Silicon) 또는 `Corner-Todo-x.y.z-x64.dmg`(Intel)
 
 코드 서명이 없어서 첫 실행 때 경고가 뜬다.
 Windows는 SmartScreen에서 "추가 정보 → 실행", macOS는 앱 우클릭 → "열기".
