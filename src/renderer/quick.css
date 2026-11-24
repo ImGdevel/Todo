@@ -1,0 +1,30 @@
+:root {
+  color-scheme: dark;
+  --bg: #1c2023;
+  --line: #3a4247;
+  --text: #eceff1;
+  --muted: #8e989f;
+  --accent: #2fbf83;
+}
+@media (prefers-color-scheme: light) {
+  :root { color-scheme: light; --bg: #ffffff; --line: #cfd5d1; --text: #1a1e20; --muted: #68727a; --accent: #178f5f; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+body {
+  padding: 8px;
+  font: 14px/1.4 "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  color: var(--text);
+}
+.box {
+  height: 100%; margin: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.row { display: flex; align-items: center; gap: 10px; }
+.plus { color: var(--accent); font-size: 22px; font-weight: 600; line-height: 1; }
+#text { flex: 1; min-width: 0; border: none; outline: none; background: none; font: inherit; font-size: 17px; color: inherit; }
+.routine { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+.routine input { accent-color: var(--accent); margin: 0; }
+.hint { font-size: 12px; color: var(--muted); padding-left: 32px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hint.ok { color: var(--accent); }

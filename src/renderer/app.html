@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <title>Corner Todo</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand"><span class="logo" aria-hidden="true"></span><h1>Corner Todo</h1></div>
+    <nav class="tabs" id="tabs">
+      <button type="button" data-tab="today">오늘</button>
+      <button type="button" data-tab="goals">목표</button>
+      <button type="button" data-tab="tasks">할 일·루틴</button>
+      <button type="button" data-tab="history">기록</button>
+      <button type="button" data-tab="settings">설정</button>
+    </nav>
+    <div class="top-right">
+      <div class="worktime-chip" title="오늘 누적 집중 시간"><span>Work Time</span><b id="top-work">0분</b></div>
+      <label class="toggle-row compact"><span>오버레이</span><input type="checkbox" class="switch" id="top-overlay"></label>
+    </div>
+  </header>
+  <main id="view"></main>
+  <dialog id="dlg"></dialog>
+
+  <script src="../shared/model.js"></script>
+  <script src="ui.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
