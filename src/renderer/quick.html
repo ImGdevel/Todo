@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <title>빠른 추가</title>
+  <link rel="stylesheet" href="quick.css">
+</head>
+<body>
+  <form class="box" id="form">
+    <div class="row">
+      <span class="plus" aria-hidden="true">+</span>
+      <input id="text" type="text" autocomplete="off" maxlength="300" placeholder="오늘 할 일 입력 후 Enter" aria-label="할 일">
+      <label class="routine"><input type="checkbox" id="routine"> 매일 반복</label>
+    </div>
+    <div class="hint" id="hint">/10쪽 목표량 · @14:30 일정 · Esc 닫기</div>
+  </form>
+  <script src="../shared/model.js"></script>
+  <script src="quick.js"></script>
+</body>
+</html>

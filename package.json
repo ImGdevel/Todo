@@ -1,8 +1,8 @@
 {
   "name": "corner-todo",
-  "version": "0.1.0",
-  "description": "화면 구석에 띄워두는 오버레이 Todo 리스트 + 타이머",
-  "main": "src/main.js",
+  "version": "0.2.0",
+  "description": "목표·할 일·루틴 관리와 집중 타이머, 화면 구석 오버레이",
+  "main": "src/main/index.js",
   "author": "ImGdevel",
   "license": "MIT",
   "repository": {
@@ -11,6 +11,8 @@
   },
   "scripts": {
     "start": "electron .",
+    "test": "node --test",
+    "smoke": "node tools/run-smoke.js",
     "dist:win": "electron-builder --win",
     "dist:mac": "electron-builder --mac"
   },
@@ -20,6 +22,9 @@
     "files": [
       "src/**/*",
       "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**"
     ],
     "win": {
       "target": [
@@ -48,5 +53,8 @@
   "devDependencies": {
     "electron": "^45.3.3",
     "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "koffi": "3.3.6"
   }
 }
