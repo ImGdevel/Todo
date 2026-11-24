@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+  <title>Corner Todo Overlay</title>
+  <link rel="stylesheet" href="overlay.css">
+</head>
+<body>
+  <div class="card" id="card">
+    <section class="timer" id="timer">
+      <div class="timer-main">
+        <span class="mode" id="mode"></span>
+        <span class="time" id="time">--:--</span>
+        <span class="spacer"></span>
+        <div class="btns">
+          <button type="button" id="play" title="시작 / 일시정지"></button>
+          <button type="button" id="reset" title="처음으로"></button>
+        </div>
+      </div>
+      <div class="progress"><i id="bar"></i></div>
+      <div class="now" id="now"></div>
+    </section>
+
+    <header class="bar">
+      <span class="count" id="count"></span>
+      <span class="spacer"></span>
+      <span class="lock" id="lock" hidden></span>
+      <button type="button" id="gear" class="btns-solo" title="설정 열기"></button>
+    </header>
+
+    <ul class="list" id="list"></ul>
+    <div class="more" id="more" hidden></div>
+  </div>
+
+  <script src="shared.js"></script>
+  <script src="overlay.js"></script>
+</body>
+</html>

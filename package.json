@@ -1,0 +1,51 @@
+{
+  "name": "corner-todo",
+  "version": "0.1.0",
+  "description": "화면 구석에 띄워두는 오버레이 Todo 리스트 + 타이머",
+  "main": "src/main.js",
+  "author": "ImGdevel",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ImGdevel/Todo.git"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "app.cornertodo.desktop",
+    "productName": "Corner Todo",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "publish": {
+      "provider": "github",
+      "releaseType": "draft"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.productivity"
+    }
+  },
+  "devDependencies": {
+    "electron": "^45.3.3",
+    "electron-builder": "^26.18.0"
+  }
+}

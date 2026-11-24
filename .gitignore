@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+
+# build output (distributed via GitHub Releases, never committed)
+dist/
+out/
+*.exe
+*.dmg
+*.zip
+*.blockmap
+
+# logs / OS / editor
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
