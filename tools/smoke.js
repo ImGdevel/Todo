@@ -206,6 +206,44 @@ async function run({ store, timer, dispatch, getWins, quit }) {
     check('history opens the day on the today screen', await js(mainWin, `view.tab === 'today' && view.date === '${yest}'`));
     await js(mainWin, `view.date=null; view.histDay=null;`);
 
+    // Settings: every control ends on the same right edge; toggles, sliders and shortcuts work.
+    await js(mainWin, `view.tab='settings'; render();`);
+    await wait(250);
+    check('settings controls share one right edge',
+      await js(mainWin, `(() => { const r = [...document.querySelectorAll('.set-ctrl')].map((c) => Math.round(c.getBoundingClientRect().right)); return r.length >= 12 && new Set(r).size === 1; })()`));
+    check('settings lists every shortcut', await js(mainWin, `document.querySelectorAll('.set-group:last-child .set-row').length === S.shortcuts.length`));
+    const clickBefore = s.settings.clickThrough;
+    await js(mainWin, `[...document.querySelectorAll('label.set-row')].find((r) => r.textContent.startsWith('클릭 통과')).querySelector('.switch').click()`);
+    await wait(300);
+    check('settings toggle row saves', s.settings.clickThrough === !clickBefore);
+    dispatch({ type: 'settings/set', payload: { clickThrough: clickBefore } });
+    await js(mainWin, `{ const r=document.querySelector('input.slim'); r.value='0.6'; r.dispatchEvent(new Event('input')); }`);
+    await wait(300);
+    check('settings slider saves', Math.abs(s.settings.opacity - 0.6) < 0.001);
+    await js(mainWin, `document.activeElement.blur(); render();`);
+    await wait(250);
+    await shot(mainWin, 'main-settings');
+    await js(mainWin, `document.querySelector('.page').scrollTop = 10000`);
+    await wait(150);
+    await shot(mainWin, 'main-settings-bottom');
+
+    // Light and dark captures of the three screens (the main window follows the system theme).
+    {
+      const { nativeTheme } = require('electron');
+      const prev = nativeTheme.themeSource;
+      for (const mode of ['light', 'dark']) {
+        nativeTheme.themeSource = mode;
+        await wait(300);
+        for (const tab of ['goals', 'history', 'settings']) {
+          await js(mainWin, `view.tab='${tab}'; view.goal=null; view.period='month'; view.periodStart=null; render(); document.querySelector('#view > *').scrollTop = 0;`);
+          await wait(250);
+          await shot(mainWin, `theme-${mode}-${tab}`);
+        }
+      }
+      nativeTheme.themeSource = prev;
+      await wait(200);
+    }
+
     await js(mainWin, `view.tab='today'; view.edit=S.tasks[0].id; render();`);
     await wait(350);
     await shot(mainWin, 'main-edit');

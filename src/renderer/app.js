@@ -824,60 +824,77 @@ function dayDetail(key, st) {
 }
 
 // ---------- settings ----------
+// One row shape everywhere: label + gray description on the left, the control on the right.
+// Each group is one card; rows have no separators.
+
+function settingRow(label, note, control, extra = {}) {
+  const tag = extra.label ? 'label.set-row' : 'div.set-row';
+  return h(tag, { className: `set-row${extra.top ? ' top' : ''}` },
+    h('span.set-text', h('span.set-label', label), note ? h('small', note) : null),
+    h('span.set-ctrl', control));
+}
 
 function renderSettings() {
   const s = S.settings;
-  const set = (k) => (e) => send('settings/set', { [k]: e.target.type === 'checkbox' ? e.target.checked : Number(e.target.value) || e.target.value });
-  const toggle = (k, label, note) => h('label.toggle-row', h('span', label, note ? h('small', note) : null), h('input.switch', { type: 'checkbox', checked: !!s[k], onchange: set(k) }));
-  const slider = (k, label, min, max, step, fmt) => {
-    const out = h('output', fmt(s[k]));
-    return h('label.slider', h('span', label),
-      h('input', { type: 'range', min, max, step, value: s[k], oninput: (e) => { out.textContent = fmt(Number(e.target.value)); send('settings/set', { [k]: Number(e.target.value) }); } }),
-      out);
+  const set = (patch) => send('settings/set', patch);
+  const toggle = (k, label, note) => settingRow(label, note,
+    h('input.switch', { type: 'checkbox', checked: !!s[k], 'aria-label': label, onchange: (e) => set({ [k]: e.target.checked }) }), { label: true });
+  const slider = (k, label, note, min, max, step, fmt) => {
+    const out = h('output.set-val', fmt(s[k]));
+    const fill = (v) => `${((v - min) / (max - min)) * 100}%`;
+    const input = h('input.slim', {
+      type: 'range', min, max, step, value: s[k], 'aria-label': label, style: { '--fill': fill(s[k]) },
+      oninput: (e) => {
+        const v = Number(e.target.value);
+        out.textContent = fmt(v);
+        e.target.style.setProperty('--fill', fill(v));
+        set({ [k]: v });
+      },
+    });
+    return settingRow(label, note, [out, input]);
   };
   const pct = (v) => `${Math.round(v * 100)}%`;
   const mac = S.platform === 'darwin';
   const keycaps = (a) => a.replace('CommandOrControl', mac ? '⌘' : 'Ctrl').replace('Shift', mac ? '⇧' : 'Shift').split('+').map((k) => h('kbd', k));
+  const corners = [['top-left', '왼쪽 위'], ['top-right', '오른쪽 위'], ['bottom-left', '왼쪽 아래'], ['bottom-right', '오른쪽 아래']];
+  const section = (title, rows, foot) => h('section.set-group', h('h2', title), h('div.card.set-card', rows), foot ? h('p.note.set-foot', foot) : null);
 
-  return h('div.settings', h('div',
+  return h('div.page.settings',
     h('header.page-head', h('div.page-title', h('h1', '설정'))),
-    h('section.panel',
-      h('div.panel-head', h('h2', '오버레이')),
-      toggle('overlayVisible', '오버레이 표시'),
-      toggle('clickThrough', '클릭 통과', '오버레이가 마우스를 받지 않음. 단축키로 조작 모드와 오감'),
-      toggle('overlayLocked', '위치·폭 잠금', '끄면 오버레이를 끌어 옮기고, 오른쪽 가장자리를 끌어 폭을 바꿀 수 있음. 좁히면 한 줄 알약이 됨'),
-      h('label.field', h('span', '모니터'),
-        h('select', { value: S.overlayDisplayId ?? '', onchange: (e) => send('overlay/toDisplay', { id: Number(e.target.value) }) },
-          S.displays.map((d) => h('option', { value: d.id }, d.label)))),
-      h('div.field', h('span', '구석으로 보내기'),
-        h('div.inline',
-          [['top-left', '왼쪽 위'], ['top-right', '오른쪽 위'], ['bottom-left', '왼쪽 아래'], ['bottom-right', '오른쪽 아래']]
-            .map(([c, l]) => h('button.btn.sm', { type: 'button', onclick: () => send('overlay/snap', { corner: c }) }, l)),
-          h('button.btn.ghost.sm', { type: 'button', onclick: () => send('overlay/reset') }, '위치·폭 초기화'))),
-      slider('opacity', '판 불투명도', 0.15, 1, 0.01, pct),
-      slider('fontScale', '크기', 0.8, 1.5, 0.05, pct),
-      h('label.field', h('span', '오버레이 테마'),
-        h('select', { value: s.theme, onchange: (e) => send('settings/set', { theme: e.target.value }) },
+    section('오버레이 · 표시', [
+      toggle('overlayVisible', '오버레이 표시', '사이드바 아래 스위치와 같음'),
+      settingRow('테마', '메인 창은 시스템 테마를 따름',
+        h('select', { value: s.theme, 'aria-label': '오버레이 테마', onchange: (e) => set({ theme: e.target.value }) },
           h('option', { value: 'dark' }, '어둡게'), h('option', { value: 'light' }, '밝게'))),
-      h('p.note', '메인 창은 시스템 테마를 따름'),
-    ),
-    h('section.panel',
-      h('div.panel-head', h('h2', '타이머·알림')),
-      h('label.toggle-row', h('span', '기본 계획 시간 (분)'),
-        h('input#default-min', { type: 'number', min: '1', max: '600', value: s.defaultPlannedMin, onchange: set('defaultPlannedMin') })),
-      toggle('soundTimer', '계획 시간 도달 알림음'),
+      slider('opacity', '판 불투명도', '낮추면 뒤 화면이 비침', 0.15, 1, 0.01, pct),
+      slider('fontScale', '크기', '글자와 판을 함께 키움', 0.8, 1.5, 0.05, pct),
+    ]),
+    section('오버레이 · 위치와 조작', [
+      settingRow('모니터', null,
+        h('select', { value: S.overlayDisplayId ?? '', 'aria-label': '오버레이 모니터', onchange: (e) => send('overlay/toDisplay', { id: Number(e.target.value) }) },
+          S.displays.map((d) => h('option', { value: d.id }, d.label)))),
+      settingRow('구석으로 보내기', '그림의 구석을 누르면 그 모니터의 구석으로 옮김', [
+        h('span.corner-pick', { role: 'group', 'aria-label': '구석으로 보내기' },
+          corners.map(([c, l]) => h('button', { type: 'button', className: `cp ${c}`, title: l, 'aria-label': l, onclick: () => send('overlay/snap', { corner: c }) }))),
+        h('button.btn.ghost.sm', { type: 'button', onclick: () => send('overlay/reset') }, '초기화'),
+      ]),
+      toggle('overlayLocked', '위치·폭 잠금', '끄면 끌어서 옮기고, 오른쪽 가장자리로 폭을 바꿈. 좁히면 한 줄 알약이 됨'),
+      toggle('clickThrough', '클릭 통과', '오버레이가 마우스를 받지 않음. 단축키로 조작 모드와 오감'),
+    ]),
+    section('타이머·알림', [
+      settingRow('기본 계획 시간', '새 집중 세션과 계획이 없는 할 일에 씀', [
+        h('input#default-min', { type: 'number', min: '1', max: '600', value: s.defaultPlannedMin, 'aria-label': '기본 계획 시간(분)', onchange: (e) => Number(e.target.value) > 0 && set({ defaultPlannedMin: Number(e.target.value) }) }),
+        h('span.muted', '분'),
+      ]),
+      toggle('soundTimer', '계획 시간 도달 알림음', '한 번만 울림. 세션은 초과 시간으로 계속 기록'),
       toggle('soundSchedule', '일정 시각 알림음'),
-    ),
-    h('section.panel',
-      h('div.panel-head', h('h2', '일반')),
+    ]),
+    section('일반', [
       toggle('launchAtLogin', 'PC 시작 시 자동 실행', S.isPackaged ? null : '설치된 앱에서만 적용됨 (개발 실행 중)'),
-      h('dl.keys', S.shortcuts.map((k) => [
-        h('dt', k.label),
-        h('dd.inline', { style: { gap: '4px' } }, keycaps(k.accel), k.ok ? null : h('span.warn-text', '다른 앱이 사용 중')),
-      ])),
-      h('p.note', '메인 창을 닫아도 트레이에서 계속 실행됨. 완전 종료는 트레이 아이콘 메뉴에서'),
-    ),
-  ));
+    ], '메인 창을 닫아도 트레이에서 계속 실행됨. 완전 종료는 트레이 아이콘 메뉴에서'),
+    section('단축키',
+      S.shortcuts.map((k) => settingRow(k.label, k.ok ? null : h('span.warn-text', '다른 앱이 사용 중이라 등록하지 못함'), h('span.keys', keycaps(k.accel))))),
+  );
 }
 
 // ---------- boot ----------
