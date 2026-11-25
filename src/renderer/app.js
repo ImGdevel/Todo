@@ -4,7 +4,8 @@ const $ = (sel, root = document) => root.querySelector(sel);
 
 let S = null; // latest snapshot from main
 // edit: task id being edited in the side panel, or a draft object for a new task.
-const view = { tab: 'today', date: null, period: 'week', periodStart: null, histDay: null, edit: null };
+// goal: { id } of the goal in the goal panel, or a draft ({ draft: true, ... }) for a new one.
+const view = { tab: 'today', date: null, period: 'week', periodStart: null, histDay: null, edit: null, goal: null };
 let dirty = false;
 
 const send = (type, payload) => api.dispatch(type, payload);
@@ -31,6 +32,7 @@ function render() {
   const keep = editing ? { id: a.id, value: a.value, start: a.selectionStart, end: a.selectionEnd } : null;
   dirty = false;
   if (view.edit && typeof view.edit === 'string' && !taskById(view.edit)) view.edit = null;
+  if (view.goal && !view.goal.draft && !(goalById(view.goal.id) && !goalById(view.goal.id).archivedAt)) view.goal = null;
   for (const b of document.querySelectorAll('.side-nav [data-tab]')) b.classList.toggle('on', b.dataset.tab === view.tab);
   $('#top-overlay').checked = S.settings.overlayVisible;
   const left = M.dayItems(S, S.today, S.today).filter((t) => !M.taskDone(S, t, S.today)).length;
@@ -56,7 +58,7 @@ document.addEventListener('focusout', () => setTimeout(() => { if (dirty) render
 
 document.querySelector('.side-nav').addEventListener('click', (e) => {
   const b = e.target.closest('[data-tab]');
-  if (b) { view.tab = b.dataset.tab; view.edit = null; render(); }
+  if (b) { view.tab = b.dataset.tab; view.edit = null; view.goal = null; render(); }
 });
 $('#top-overlay').addEventListener('change', (e) => send('settings/set', { overlayVisible: e.target.checked }));
 
@@ -398,14 +400,122 @@ function editPanel(key) {
 }
 
 // ---------- goals ----------
+// Outline per period: goals of the chosen period, grouped under their parent goal, with
+// their sub-goals and linked tasks indented below. Editing happens in the right column.
+
+// "29 / 140쪽", "34%", or null for a manual goal without a target (it is a check instead).
+function goalValue(p) {
+  if (p.mode === 'sum' || (p.mode === 'manual' && p.target)) return `${M.fmtNum(p.amount)} / ${M.fmtNum(p.target)}${p.unit}`;
+  if (p.mode === 'manual') return null;
+  return `${Math.round(p.percent * 100)}%`;
+}
+
+const goalBar = (percent) => h('span.bar', h('i', { style: { width: `${Math.max(0, Math.min(1, percent)) * 100}%` } }));
+
+function goalAmountEditor(goal, p) {
+  const text = h('button.qty-text', { type: 'button', title: '눌러서 진행량 입력' }, goalValue(p));
+  text.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const input = h('input.qty-input', { type: 'number', min: '0', step: 'any', value: p.amount, 'aria-label': '진행량' });
+    const done = (commit) => {
+      if (commit && input.value !== '' && Number(input.value) >= 0) send('goal/progress', { id: goal.id, delta: Number(input.value) - (goal.progress || 0) });
+      render();
+    };
+    input.addEventListener('click', (ev) => ev.stopPropagation());
+    input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') done(true); if (ev.key === 'Escape') done(false); });
+    input.addEventListener('blur', () => done(true));
+    text.replaceWith(input);
+    input.select();
+  });
+  return text;
+}
+
+function goalRow(goal, level) {
+  const p = M.goalProgress(S, goal);
+  const kids = M.goalChildren(S, goal);
+  const value = goalValue(p);
+  const selected = !!view.goal && view.goal.id === goal.id;
+  const checkable = p.mode === 'manual' && !p.target;
+  const bits = [];
+  if (level > 0) bits.push(`${PERIOD_NAME[goal.period]} ${M.periodLabel(goal.period, goal.start)}`);
+  if (kids.goals.length) bits.push(`하위 목표 ${kids.goals.length}`);
+  if (kids.tasks.length) bits.push(`할 일 ${kids.tasks.length}`);
+  if (p.mode === 'manual') bits.push('직접 입력');
+
+  return h('div.goal-row', {
+    className: `goal-row lv${level}${selected ? ' selected' : ''}${checkable && goal.done ? ' done' : ''}`,
+    dataset: { id: goal.id },
+    onclick: () => { view.goal = selected ? null : { id: goal.id }; render(); },
+  },
+    checkable
+      ? h('button.check', { type: 'button', icon: 'check', 'aria-label': goal.done ? '달성 취소' : '달성', title: goal.done ? '달성 취소' : '달성', onclick: (e) => { e.stopPropagation(); send('goal/progress', { id: goal.id, done: !goal.done }); } })
+      : h('span.check-slot'),
+    h('div.body', h('div.title', h('span', goal.title)), bits.length ? h('div.meta', bits.join(' · ')) : null),
+    value ? h('div.qty.goal-qty', p.mode === 'manual' && level === 0 ? goalAmountEditor(goal, p) : h('span.qty-val', value), goalBar(p.percent)) : null,
+  );
+}
+
+function goalTaskRow(task, range) {
+  const c = M.taskContribution(S, task, range);
+  const label = c.unit ? `${M.fmtNum(c.amount)}${c.unit}` : `${Math.round(c.percent * 100)}%`;
+  const meta = [M.isRoutine(task) ? `루틴 · ${repeatText(task)}` : task.done ? `할 일 · ${M.periodLabel('day', task.doneDate)} 완료` : `할 일 · ${M.periodLabel('day', task.date)}`];
+  if (task.archivedAt) meta.push('삭제됨');
+  return h('div.goal-row', { className: `goal-row task-kid${task.archivedAt ? ' archived' : ''}` },
+    h('span.check-slot', h('span.kid-dot')),
+    h('div.body', h('div.title', h('span', task.title)), h('div.meta', meta.join(' · '))),
+    h('div.qty.goal-qty', h('span.qty-val', label)),
+  );
+}
+
+function goalBlock(goal) {
+  const kids = M.goalChildren(S, goal);
+  const range = M.periodRange(goal.period, goal.start);
+  const children = [
+    ...kids.goals.slice().sort((a, b) => (a.start < b.start ? -1 : 1)).map((g) => h('li', goalRow(g, 1))),
+    ...kids.tasks.slice().sort((a, b) => !!a.archivedAt - !!b.archivedAt).map((t) => h('li', goalTaskRow(t, range))),
+  ];
+  return h('li', goalRow(goal, 0), children.length ? h('ul.goal-kids', children) : null);
+}
 
 function renderGoals() {
   view.periodStart = view.periodStart ? M.periodStart(view.period, view.periodStart) : M.periodStart(view.period, S.today);
   const start = view.periodStart;
-  const goals = activeGoals().filter((g) => g.period === view.period && g.start === start);
+  const goals = activeGoals().filter((g) => g.period === view.period && g.start === start)
+    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
   const current = M.periodStart(view.period, S.today);
 
-  return h('div.page',
+  // Group under the parent goal so the "up" relation is visible; each goal appears once.
+  const groups = new Map();
+  for (const g of goals) {
+    const parent = g.parentId && goalById(g.parentId);
+    const key = parent && !parent.archivedAt ? parent.id : '';
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(g);
+  }
+  const keys = [...groups.keys()].sort((a, b) => (a === '' ? 1 : b === '' ? -1 : 0));
+  const blocks = keys.map((k) => {
+    const parent = k && goalById(k);
+    let head = null;
+    if (parent) {
+      const pp = M.goalProgress(S, parent);
+      const pv = goalValue(pp);
+      head = h('button.goal-parent', {
+        type: 'button', title: '상위 목표 열기',
+        onclick: () => { view.period = parent.period; view.periodStart = parent.start; view.goal = { id: parent.id }; render(); },
+      },
+        h('span.up', '상위'), h('span.p-title', parent.title),
+        h('span.p-meta', `${PERIOD_NAME[parent.period]}${pv ? ` · ${pv}` : parent.done ? ' · 달성' : ''}`));
+    } else if (keys.length > 1) head = h('h2', '상위 목표 없음');
+    return h('div.group', head, h('ul.goal-list', groups.get(k).map(goalBlock)));
+  });
+
+  const [a, b] = M.periodRange(view.period, start);
+  const total = M.daysBetween(a, b) + 1;
+  const left = S.today < a ? total : S.today > b ? 0 : M.daysBetween(S.today, b) + 1;
+  const sub = start === current ? (view.period === 'day' ? '오늘' : `${left}일 남음 · ${total}일 중`) : start < current ? '지난 기간' : '앞으로의 기간';
+  const newDraft = () => { view.goal = { draft: true, period: view.period, start, title: '', target: '', unit: '', parentId: null }; render(); };
+
+  const list = h('section.today-list', { 'aria-label': '목표 목록' },
     h('header.page-head',
       h('div.page-title',
         h('h1', M.periodLabel(view.period, start)),
@@ -413,50 +523,120 @@ function renderGoals() {
         iconBtn('right', '다음 기간', () => { view.periodStart = M.shiftPeriod(view.period, start, 1); render(); }),
         start === current ? null : h('button.btn.ghost.sm', { type: 'button', onclick: () => { view.periodStart = current; render(); } }, '이번 기간'),
       ),
+      h('p.page-sub', goals.length ? `목표 ${goals.length} · ${sub}` : sub),
     ),
-    h('div.panel-head',
-      h('div.seg', M.PERIODS.map((p) => h('button', { type: 'button', className: p === view.period ? 'on' : '', onclick: () => { view.period = p; view.periodStart = M.periodStart(p, start); render(); } }, PERIOD_NAME[p]))),
-      h('button.btn', { type: 'button', icon: 'plus', onclick: () => openGoalDialog(null, { period: view.period, start }) }, '목표 추가'),
+    h('div.toolbar',
+      h('div.seg', { role: 'radiogroup', 'aria-label': '기간 단위' }, M.PERIODS.map((p) => h('button', {
+        type: 'button', role: 'radio', 'aria-checked': String(p === view.period), className: p === view.period ? 'on' : '',
+        onclick: () => { view.period = p; view.periodStart = M.periodStart(p, start); render(); },
+      }, PERIOD_NAME[p]))),
+      h('button.btn.sm', { type: 'button', icon: 'plus', onclick: newDraft }, '목표 추가'),
     ),
-    goals.length
-      ? h('div.goal-grid', goals.map(goalCard))
-      : emptyNote(`${M.periodLabel(view.period, start)}에 정한 ${PERIOD_NAME[view.period]} 목표가 없음`),
+    goals.length ? blocks : emptyNote(`${M.periodLabel(view.period, start)}에 정한 ${PERIOD_NAME[view.period]} 목표가 없음`),
   );
+  return h('div.today', list, h('aside.side-col', view.goal ? goalPanel() : goalSummary(goals, a, b, total, left)));
 }
 
-function goalCard(goal) {
-  const p = M.goalProgress(S, goal);
-  const kids = M.goalChildren(S, goal);
-  const parent = goal.parentId && goalById(goal.parentId);
-  const range = M.periodRange(goal.period, goal.start);
-  const value = p.mode === 'sum' || (p.mode === 'manual' && p.target)
-    ? `${M.fmtNum(p.amount)} / ${M.fmtNum(p.target)}${p.unit}` : `${Math.round(p.percent * 100)}%`;
-  const modeNote = { sum: '하위 진행량 합산', ratio: '하위 달성률 평균', manual: '직접 입력' }[p.mode];
-
-  return h('article.goal-card',
-    h('div.goal-head',
-      h('div', h('h3', goal.title), parent ? h('span.muted.small', `상위 · ${parent.title}`) : null),
-      iconBtn('edit', '편집', () => openGoalDialog(goal)),
+function goalSummary(goals, a, b, total, left) {
+  const passed = total - left;
+  const reached = goals.filter((g) => M.goalProgress(S, g).percent >= 1).length;
+  const avg = goals.length ? goals.reduce((n, g) => n + M.goalProgress(S, g).percent, 0) / goals.length : 0;
+  return [
+    h('h2', '기간'),
+    h('div.card.period-card',
+      h('div.big-line', h('span.big-num', `${passed} / ${total}`), h('span.big-unit', '일 지남')),
+      goalBar(passed / total),
+      h('span.now-sub', a === b ? M.periodLabel('day', a) : `${M.periodLabel('day', a)} – ${M.periodLabel('day', b)}`),
     ),
-    h('div.goal-value', h('b', value), h('span.muted.small', modeNote)),
-    h('div.progress', h('i', { style: { width: `${p.percent * 100}%` } })),
-    p.mode === 'manual' ? h('div.inline',
-      p.target
-        ? [iconBtn('minus', '1 줄이기', () => send('goal/progress', { id: goal.id, delta: -1 }), 'sm'), iconBtn('plus', '1 늘리기', () => send('goal/progress', { id: goal.id, delta: 1 }), 'sm')]
-        : h('label.toggle-row', h('span', '달성'), h('input.switch', { type: 'checkbox', checked: !!goal.done, onchange: (e) => send('goal/progress', { id: goal.id, done: e.target.checked }) })),
-      h('span.muted.small', '하위 목표나 할 일을 연결하면 자동으로 계산됨'),
+    goals.length ? h('div.stats',
+      h('div', h('span', '목표'), h('span', String(goals.length))),
+      h('div', h('span', '다 채운 목표'), h('span', String(reached))),
+      h('div', h('span', '평균 진행'), h('span', `${Math.round(avg * 100)}%`)),
     ) : null,
-    kids.goals.length || kids.tasks.length ? h('ul.goal-kids',
-      kids.goals.map((g) => {
-        const gp = M.goalProgress(S, g);
-        return h('li', h('span.kind', PERIOD_NAME[g.period]), h('span.k-title', g.title), h('span.muted', `${Math.round(gp.percent * 100)}%`));
-      }),
-      kids.tasks.map((t) => {
-        const c = M.taskContribution(S, t, range);
-        const label = c.unit ? `${M.fmtNum(c.amount)}${c.unit}` : `${Math.round(c.percent * 100)}%`;
-        return h('li', { className: t.archivedAt ? 'archived' : '' }, h('span.kind', M.isRoutine(t) ? '루틴' : '할 일'), h('span.k-title', t.title), h('span.muted', label));
-      }),
-    ) : null,
+    h('p.note.side-note', '목표를 누르면 여기서 고침. 상위 목표를 정하면 진행이 위로 합쳐짐'),
+  ];
+}
+
+// ---------- goal panel (auto-save like the task panel; a new goal is a draft until 추가) ----------
+
+function goalPanel() {
+  const isNew = !!view.goal.draft;
+  const g = isNew ? view.goal : goalById(view.goal.id);
+  const follow = (period, startKey) => { view.period = period; view.periodStart = M.periodStart(period, startKey); };
+  const save = (patch) => {
+    if (isNew) { Object.assign(view.goal, patch); if (patch.period || patch.start) follow(view.goal.period, view.goal.start); render(); return; }
+    if (patch.period || patch.start) follow(patch.period || g.period, patch.start || g.start);
+    send('goal/update', { id: g.id, patch });
+  };
+  const close = () => { view.goal = null; render(); };
+  const startKey = M.periodStart(g.period, g.start || S.today);
+  const p = isNew ? null : M.goalProgress(S, g);
+  const kids = isNew ? { goals: [], tasks: [] } : M.goalChildren(S, g);
+
+  const title = h('input#goal-title.edit-title', { type: 'text', value: g.title || '', maxlength: '300', placeholder: '예: 토익 RC 끝내기', 'aria-label': '목표 제목' });
+  const addDraft = () => {
+    const d = view.goal;
+    if (!d.title || !d.title.trim()) { title.focus(); return; }
+    send('goal/add', { title: d.title, period: d.period, start: d.start, target: d.target, unit: d.unit, parentId: d.parentId || null });
+    view.goal = null;
+    render();
+  };
+  title.addEventListener(isNew ? 'input' : 'change', () => { if (isNew) view.goal.title = title.value; else if (title.value.trim()) save({ title: title.value }); });
+  title.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); if (isNew) addDraft(); else title.blur(); } if (e.key === 'Escape') close(); });
+
+  const probe = { id: g.id || '__new', period: g.period, start: startKey };
+  const parents = activeGoals().filter((x) => M.canParent(x, probe));
+
+  let progress = null;
+  if (p && p.mode === 'manual') {
+    progress = p.target
+      ? h('div.erow', h('span.lab', '진행'),
+        h('div.stepper',
+          iconBtn('minus', '1 줄이기', () => send('goal/progress', { id: g.id, delta: -1 }), 'sm'),
+          h('input#goal-amount', { type: 'number', min: '0', step: 'any', value: p.amount, 'aria-label': '진행량', onchange: (e) => e.target.value !== '' && send('goal/progress', { id: g.id, delta: Number(e.target.value) - (g.progress || 0) }) }),
+          iconBtn('plus', '1 늘리기', () => send('goal/progress', { id: g.id, delta: 1 }), 'sm')),
+        h('span.muted', `/ ${M.fmtNum(p.target)}${p.unit}`))
+      : h('div.erow', h('span.lab', '진행'), h('label.check-label', h('input#goal-done.switch', { type: 'checkbox', checked: !!g.done, onchange: (e) => send('goal/progress', { id: g.id, done: e.target.checked }) }), '달성'));
+  }
+  const modeNote = !p ? '하위 목표나 할 일을 연결하면 진행이 자동으로 계산됨'
+    : p.mode === 'sum' ? `하위 진행량 합산 · ${goalValue(p)}`
+      : p.mode === 'ratio' ? `하위 달성률 평균 · ${Math.round(p.percent * 100)}%${p.target ? ' · 단위가 달라 합산하지 않음' : ''}`
+        : '하위가 없어 직접 입력. 하위 목표나 할 일을 연결하면 자동으로 계산됨';
+
+  return h('div.card.edit', { role: 'region', 'aria-label': isNew ? '목표 추가' : '목표 편집' },
+    h('div.edit-head', h('span', isNew ? '새 목표' : '목표'), iconBtn('close', '닫기', close, 'sm')),
+    title,
+    h('div.rows',
+      h('div.erow', h('span.lab', '기간'),
+        h('div.seg', { role: 'radiogroup', 'aria-label': '기간 단위' }, M.PERIODS.map((k) => h('button', {
+          type: 'button', role: 'radio', 'aria-checked': String(g.period === k), className: g.period === k ? 'on' : '',
+          onclick: () => save({ period: k, start: M.periodStart(k, startKey) }),
+        }, PERIOD_NAME[k])))),
+      h('div.erow.top', h('span.lab', '날짜'),
+        h('div.grow',
+          h('input#goal-start', { type: 'date', value: startKey, 'aria-label': '기간 안의 아무 날짜', onchange: (e) => e.target.value && save({ start: e.target.value }) }),
+          h('span.note', M.periodLabel(g.period, startKey)))),
+      h('div.erow', h('span.lab', '목표량'),
+        h('input#goal-target', { type: 'number', min: '0', step: 'any', value: g.target ?? '', placeholder: '없음', 'aria-label': '목표량', onchange: (e) => save({ target: e.target.value }) }),
+        h('input#goal-unit.unit', { type: 'text', list: 'units', maxlength: '12', value: g.unit || '', placeholder: '단위', 'aria-label': '단위', onchange: (e) => save({ unit: e.target.value }) })),
+      h('div.erow.top', h('span.lab', '상위'),
+        h('div.grow',
+          h('select#goal-parent', { value: parents.some((x) => x.id === g.parentId) ? g.parentId : '', 'aria-label': '상위 목표', disabled: g.period === 'month', onchange: (e) => save({ parentId: e.target.value || null }) },
+            h('option', { value: '' }, g.period === 'month' ? '월간 목표는 맨 위' : '없음'),
+            parents.map((x) => h('option', { value: x.id }, `${x.title} · ${PERIOD_NAME[x.period]} ${M.periodLabel(x.period, x.start)}`))),
+          g.period === 'month' ? null : h('span.note', '더 긴 기간의 목표 중 이 기간을 포함하는 것만'))),
+      progress,
+    ),
+    h('div.record',
+      h('span.cap', '진행 계산'),
+      h('span.note', modeNote),
+      kids.goals.length || kids.tasks.length ? h('div', h('span', '연결됨'), h('span', [kids.goals.length ? `하위 목표 ${kids.goals.length}` : null, kids.tasks.length ? `할 일 ${kids.tasks.length}` : null].filter(Boolean).join(' · '))) : null,
+    ),
+    h('datalist#units', UNITS.map((u) => h('option', { value: u }))),
+    isNew
+      ? h('div.edit-foot', h('button.btn.ghost', { type: 'button', onclick: close }, '취소'), h('button.btn.primary', { type: 'button', onclick: addDraft }, '추가'))
+      : h('div.edit-foot', h('span.note', '바꾸면 바로 저장'),
+        h('button.btn.danger.sm', { type: 'button', onclick: () => { send('goal/archive', { id: g.id }); view.goal = null; } }, '삭제')),
   );
 }
 
@@ -624,69 +804,14 @@ function renderSettings() {
   ));
 }
 
-// ---------- goal dialog ----------
-
-const dlg = $('#dlg');
-dlg.addEventListener('close', () => { dlg.replaceChildren(); if (dirty) render(); });
-
-function field(label, control, note) {
-  return h('label.field', h('span', label), control, note ? h('small', note) : null);
-}
-
-function openGoalDialog(goal, defaults = {}) {
-  const g = goal || { period: 'week', start: M.periodStart('week', S.today), ...defaults };
-  const title = h('input', { type: 'text', value: g.title || '', maxlength: '300', required: true, placeholder: '예: 토익 RC 끝내기' });
-  const period = h('select', { value: g.period }, M.PERIODS.map((p) => h('option', { value: p }, PERIOD_NAME[p])));
-  const start = h('input', { type: 'date', value: g.start });
-  const target = h('input', { type: 'number', min: '0', step: 'any', value: g.target ?? '', placeholder: '없음' });
-  const unit = h('input', { type: 'text', list: 'units', maxlength: '12', value: g.unit || '' });
-  const parent = h('select');
-  const label = h('small');
-  const drawParents = () => {
-    const probe = { id: g.id || '__new', period: period.value, start: M.periodStart(period.value, start.value || S.today) };
-    label.textContent = M.periodLabel(probe.period, probe.start);
-    const options = activeGoals().filter((p) => M.canParent(p, probe));
-    const keep = parent.value || g.parentId || '';
-    parent.replaceChildren(h('option', { value: '' }, '없음 (독립 목표)'),
-      ...options.map((p) => h('option', { value: p.id }, `[${PERIOD_NAME[p.period]}] ${p.title}`)));
-    parent.value = options.some((p) => p.id === keep) ? keep : '';
-  };
-  period.addEventListener('change', drawParents);
-  start.addEventListener('change', drawParents);
-  drawParents();
-
-  const save = (e) => {
-    e.preventDefault();
-    if (!title.value.trim()) { title.focus(); return; }
-    const data = { title: title.value, period: period.value, start: start.value || S.today, target: target.value, unit: unit.value, parentId: parent.value || null };
-    if (goal) send('goal/update', { id: goal.id, patch: data });
-    else send('goal/add', data);
-    view.period = data.period;
-    view.periodStart = M.periodStart(data.period, data.start);
-    dlg.close();
-  };
-
-  dlg.replaceChildren(h('form.dialog', { onsubmit: save },
-    h('h2', goal ? '목표 편집' : '목표 추가'),
-    field('제목', title),
-    h('div.grid2', field('기간', period), h('label.field', h('span', '기간 안의 아무 날짜'), start, label)),
-    h('div.grid2', field('목표량', target, '하위 항목이 같은 단위면 합산, 아니면 달성률 평균'), field('단위', unit)),
-    field('상위 목표', parent, '더 긴 기간의 목표 중 이 기간을 포함하는 것만'),
-    h('datalist#units', UNITS.map((u) => h('option', { value: u }))),
-    h('div.dialog-actions',
-      goal ? h('button.btn.danger', { type: 'button', onclick: () => { send('goal/archive', { id: goal.id }); dlg.close(); } }, '삭제') : null,
-      h('span.spacer'),
-      h('button.btn.ghost', { type: 'button', onclick: () => dlg.close() }, '취소'),
-      h('button.btn.primary', { type: 'submit' }, '저장'),
-    ),
-  ));
-  dlg.showModal();
-  title.focus();
-}
-
 // ---------- boot ----------
 
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && view.edit && !dlg.open) { view.edit = null; render(); } });
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !(view.edit || view.goal)) return;
+  view.edit = null;
+  view.goal = null;
+  render();
+});
 api.onState((next) => { S = next; render(); });
 api.onNav((tab) => { view.tab = tab; render(); });
 api.getState().then((first) => {

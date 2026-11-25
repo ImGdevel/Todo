@@ -149,6 +149,37 @@ async function run({ store, timer, dispatch, getWins, quit }) {
       await wait(350);
       await shot(mainWin, `main-${tab}`);
     }
+    // Goals: week view groups under the month parent; month view nests the week goal.
+    const [monthGoal, weekGoal] = s.goals;
+    await js(mainWin, `view.tab='goals'; view.period='week'; view.periodStart=null; view.goal=null; render();`);
+    await wait(250);
+    check('goals week view shows parent heading',
+      (await js(mainWin, `document.querySelector('.goal-parent .p-title')?.textContent`)) === monthGoal.title);
+    await js(mainWin, `view.period='month'; view.periodStart=null; render();`);
+    await wait(250);
+    check('goals month view nests week goal under month goal',
+      await js(mainWin, `!!document.querySelector('.goal-row.lv0[data-id="${monthGoal.id}"]')?.closest('li').querySelector('.goal-kids .goal-row[data-id="${weekGoal.id}"]')`));
+    await shot(mainWin, 'main-goals-month');
+    await js(mainWin, `document.querySelector('.goal-row[data-id="${weekGoal.id}"]').click()`);
+    await wait(250);
+    await shot(mainWin, 'main-goals-edit');
+    await js(mainWin, `{ const i=document.getElementById('goal-target'); i.value='150'; i.dispatchEvent(new Event('change')); }`);
+    await wait(300);
+    check('goal panel saves on change', s.goals[1].target === 150);
+    const goalCount = s.goals.length;
+    await js(mainWin, `view.goal=null; render(); [...document.querySelectorAll('.toolbar .btn')].find((b) => b.textContent.includes('목표 추가')).click();`);
+    await wait(200);
+    await js(mainWin, `{ const t=document.getElementById('goal-title'); t.value='단어 1000개'; t.dispatchEvent(new Event('input')); const n=document.getElementById('goal-target'); n.value='1000'; n.dispatchEvent(new Event('change')); }`);
+    await wait(200);
+    await js(mainWin, `[...document.querySelectorAll('.edit-foot .btn')].find((b) => b.textContent === '추가').click()`);
+    await wait(300);
+    const newGoal = s.goals[goalCount];
+    check('goal panel adds a draft goal', s.goals.length === goalCount + 1 && newGoal.title === '단어 1000개' && newGoal.target === 1000 && newGoal.period === 'month');
+    await js(mainWin, `view.goal={ id: '${newGoal.id}' }; render(); document.querySelector('.stepper [aria-label="1 늘리기"]').click();`);
+    await wait(300);
+    check('manual goal progress steps up', s.goals[goalCount].progress === 1);
+    await js(mainWin, `view.goal=null; render();`);
+
     await js(mainWin, `view.tab='today'; view.edit=S.tasks[0].id; render();`);
     await wait(350);
     await shot(mainWin, 'main-edit');
