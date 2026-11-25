@@ -681,70 +681,146 @@ function renderTasks() {
 }
 
 // ---------- history ----------
+// Day list grouped by week (newest first), runs of empty days folded into one line.
+// "계획 대비" is the same figure as on the today screen: actual minus planned over the
+// focus sessions that ended that day.
 
 function dayStats(key) {
   const day = M.dayOf(S, key);
   const tasks = S.tasks.filter((t) => M.occursOn(t, key, S.today) || (day && day.tasks && day.tasks[t.id]));
-  let planned = 0, plannedActual = 0, over = 0;
+  let planned = 0, plannedActual = 0;
   const rows = tasks.map((t) => {
     const r = M.rec(S, key, t.id) || {};
     const focus = r.focusMs || 0;
     const plan = t.plannedMin ? t.plannedMin * 60000 : null;
-    if (plan) { planned += plan; plannedActual += focus; over += Math.max(0, focus - plan); }
+    if (plan) { planned += plan; plannedActual += focus; }
     return { t, r, focus, plan, done: M.isRoutine(t) ? !!r.done : (!!t.done && t.doneDate === key) || !!r.done };
   });
-  return { rows, done: rows.filter((x) => x.done).length, total: rows.length, work: M.workMs(S, key), planned, plannedActual, over };
+  const sessions = M.sessionsOn(S, key);
+  const diff = sessions.reduce((n, x) => n + (x.actualMs - x.plannedMs), 0);
+  return { rows, sessions, done: rows.filter((x) => x.done).length, total: rows.length, work: M.workMs(S, key), planned, plannedActual, diff };
 }
 
-function renderHistory() {
-  const days = [];
-  for (let i = 0; i < 30; i++) days.push(M.addDays(S.today, -i));
-  const selected = view.histDay || S.today;
-  const st = dayStats(selected);
-  const sessions = M.sessionsOn(S, selected);
+const signedDuration = (ms) => `${ms >= 0 ? '+' : '−'}${M.fmtDuration(Math.abs(ms))}`;
+const shortDay = (key) => { const d = M.parseKey(key); return `${d.getMonth() + 1}/${d.getDate()}`; };
 
-  return h('div.history',
-    h('section.panel',
-      h('header.page-head', h('div.page-title', h('h1', '기록'))),
-      h('div.panel-head', h('h2', '최근 30일'), h('button.btn.sm', { type: 'button', icon: 'folder', onclick: () => send('ui/openLogs') }, '로그 폴더 열기')),
-      h('table.hist',
-        h('thead', h('tr', ['날짜', '완료', '집중', '계획 / 실제', '계획 대비'].map((x) => h('th', x)))),
-        h('tbody', days.map((k) => {
-          const d = dayStats(k);
-          return h('tr', { className: k === selected ? 'on' : '', onclick: () => { view.histDay = k; render(); } },
-            h('td', M.periodLabel('day', k)),
-            h('td', d.total ? `${d.done} / ${d.total}` : '—'),
-            h('td', d.work ? M.fmtDuration(d.work) : '—'),
-            h('td', d.planned ? `${M.fmtDuration(d.planned)} / ${M.fmtDuration(d.plannedActual)}` : '—'),
-            h('td', d.over ? `+${M.fmtDuration(d.over)}` : '—'),
-          );
-        })),
-      ),
+function renderHistory() {
+  const keys = [];
+  for (let i = 0; i < 30; i++) keys.push(M.addDays(S.today, -i));
+  const stats = new Map(keys.map((k) => [k, dayStats(k)]));
+  const selected = view.histDay && stats.has(view.histDay) ? view.histDay : S.today;
+  const maxWork = Math.max(1, ...[...stats.values()].map((d) => d.work));
+  const thisWeek = M.periodStart('week', S.today);
+
+  const dayRow = (k) => {
+    const d = stats.get(k);
+    const wd = M.WEEKDAYS[M.weekday(k)];
+    const idle = !d.work && !d.done;
+    return h('li', h('button.day-row', {
+      type: 'button', className: `day-row${k === selected ? ' selected' : ''}${idle ? ' idle' : ''}`,
+      dataset: { day: k }, 'aria-pressed': String(k === selected),
+      onclick: () => { view.histDay = k; render(); },
+    },
+      h('span.c-date', h('span.d', shortDay(k)), h('span.w', wd), k === S.today ? h('span.today-tag', '오늘') : null),
+      h('span.c-focus', h('span.fbar', h('i', { style: { width: `${(d.work / maxWork) * 100}%` } })), h('span.v', d.work ? M.fmtDuration(d.work) : '—')),
+      h('span.c-done', d.total ? `${d.done} / ${d.total}` : '—'),
+      h('span.c-diff', d.sessions.length ? signedDuration(d.diff) : '—'),
+    ));
+  };
+
+  // Week groups, newest first; fold consecutive days with no tasks and no focus.
+  const weeks = [];
+  for (const k of keys) {
+    const ws = M.periodStart('week', k);
+    if (!weeks.length || weeks[weeks.length - 1].start !== ws) weeks.push({ start: ws, days: [] });
+    weeks[weeks.length - 1].days.push(k);
+  }
+  const isEmpty = (k) => { const d = stats.get(k); return !d.total && !d.work && k !== selected && k !== S.today; };
+  const foldLine = (from, to) => h('li.empty-run', from === to ? `${shortDay(from)} · 기록 없음` : `${shortDay(from)} – ${shortDay(to)} · 기록 없음`);
+  const groups = [];
+  let emptyWeeks = []; // consecutive weeks with nothing recorded become one line
+  const flushWeeks = () => {
+    if (!emptyWeeks.length) return;
+    const days = emptyWeeks.flatMap((w) => w.days);
+    groups.push(h('div.group', h('ul.day-list', foldLine(days[days.length - 1], days[0]))));
+    emptyWeeks = [];
+  };
+  for (const w of weeks) {
+    if (w.days.every(isEmpty)) { emptyWeeks.push(w); continue; }
+    flushWeeks();
+    const items = [];
+    let run = [];
+    const flush = () => {
+      if (run.length === 1) items.push(dayRow(run[0]));
+      else if (run.length) items.push(foldLine(run[run.length - 1], run[0]));
+      run = [];
+    };
+    for (const k of w.days) {
+      if (isEmpty(k)) run.push(k);
+      else { flush(); items.push(dayRow(k)); }
+    }
+    flush();
+    const work = w.days.reduce((n, k) => n + stats.get(k).work, 0);
+    const done = w.days.reduce((n, k) => n + stats.get(k).done, 0);
+    const name = w.start === thisWeek ? '이번 주' : w.start === M.addDays(thisWeek, -7) ? '지난주' : M.periodLabel('week', w.start);
+    groups.push(h('div.group',
+      h('h2.week-head', h('span', name), h('span.week-sum', work || done ? `집중 ${M.fmtDuration(work)} · 완료 ${done}` : '')),
+      h('ul.day-list', items)));
+  }
+  flushWeeks();
+
+  const list = h('section.today-list.hist-list', { 'aria-label': '날짜별 기록' },
+    h('header.page-head',
+      h('div.page-title', h('h1', '기록'), h('span.spacer'),
+        h('button.btn.ghost.sm', { type: 'button', icon: 'folder', title: '월별 JSONL 로그가 있는 폴더', onclick: () => send('ui/openLogs') }, '로그 폴더 열기')),
+      h('p.page-sub', '최근 30일 · 모든 변경과 하루 요약은 월별 JSONL 로그로도 저장됨'),
     ),
-    h('section.panel', { style: { 'padding-top': '68px' } },
-      h('div.panel-head', h('h2', M.periodLabel('day', selected)),
-        h('button.btn.sm', { type: 'button', onclick: () => { view.tab = 'today'; view.date = selected === S.today ? null : selected; render(); } }, '이 날짜 열기')),
-      st.rows.length ? h('ul.plain-list', st.rows.map(({ t, r, focus, plan, done }) => h('li.list-row', { style: { cursor: 'default' } },
-        h('div.body',
-          h('span.title', { className: done ? 'title done-text' : 'title' }, `${r.title || t.title}${done ? ' · 완료' : ''}`),
-          h('span.meta', [
-            (r.target || t.target) ? `진행 ${M.fmtNum(r.progress || 0)}${r.unit || t.unit}${M.isRoutine(t) ? ` / ${M.fmtNum(r.target ?? t.target)}` : ''}` : (r.progress ? `진행 ${M.fmtNum(r.progress)}${r.unit || ''}` : null),
-            focus ? `집중 ${M.fmtDuration(focus)}` : null,
-            plan ? `계획 ${M.fmtDuration(plan)}${focus > plan ? ` (+${M.fmtDuration(focus - plan)})` : ''}` : null,
-          ].filter(Boolean).join(' · ')),
-        ),
-      ))) : emptyNote('기록이 없음'),
-      sessions.length ? h('div',
-        h('h3.sub-head', '집중 세션'),
-        h('ul.sessions', sessions.map((s) => h('li',
-          h('span.muted', M.fmtDuration(s.plannedMs)),
-          h('span.s-title', s.title || '할 일 없이'),
-          h('span', `${M.fmtDuration(s.actualMs)}${s.overMs > 0 ? ` (+${M.fmtDuration(s.overMs)})` : ''}`),
-        ))),
-      ) : null,
-      h('p.note', '모든 변경과 하루 요약이 월별 JSONL 로그로 저장됨. AI 분석에 그대로 넘길 수 있는 형식'),
-    ),
+    h('div.day-cols', { 'aria-hidden': 'true' },
+      h('span.c-date', '날짜'), h('span.c-focus', h('span.v', '집중')), h('span.c-done', '완료'), h('span.c-diff', '계획 대비')),
+    groups,
   );
+  return h('div.today', list, h('aside.side-col', dayDetail(selected, stats.get(selected))));
+}
+
+function dayDetail(key, st) {
+  const hm = (ms) => { const d = new Date(ms); return `${M.pad(d.getHours())}:${M.pad(d.getMinutes())}`; };
+  const rows = st.rows.slice().sort((a, b) => Number(b.done) - Number(a.done));
+  return [
+    h('h2', key === S.today ? `오늘 · ${M.periodLabel('day', key)}` : M.periodLabel('day', key)),
+    h('div.card.day-card',
+      h('div', h('div.big-line', h('span.big-num', st.work ? M.fmtDuration(st.work) : '0분')), h('span.now-sub', key === S.today ? '집중 · 끝난 세션까지' : '집중')),
+      h('div.stats.in-card',
+        h('div', h('span', '완료'), h('span', st.total ? `${st.done} / ${st.total}` : '—')),
+        h('div', h('span', '끝난 세션'), h('span', String(st.sessions.length))),
+        st.sessions.length ? h('div', h('span', '계획 대비'), h('span', signedDuration(st.diff))) : null,
+        st.planned ? h('div', h('span', '계획한 할 일'), h('span', `${M.fmtDuration(st.planned)} 중 ${M.fmtDuration(st.plannedActual)} 집중`)) : null,
+      ),
+      h('button.btn', { type: 'button', onclick: () => { view.tab = 'today'; view.date = key === S.today ? null : key; render(); } }, '이 날짜 열기'),
+    ),
+    rows.length ? h('div.group',
+      h('h2', '할 일'),
+      h('ul', rows.map(({ t, r, focus, plan, done }) => {
+        const unit = r.unit || t.unit || '';
+        const target = r.target ?? t.target;
+        const meta = [
+          target ? `진행 ${M.fmtNum(r.progress || 0)}${M.isRoutine(t) ? ` / ${M.fmtNum(target)}` : ''}${unit}` : (r.progress ? `진행 ${M.fmtNum(r.progress)}${unit}` : null),
+          focus ? `집중 ${M.fmtDuration(focus)}` : null,
+          plan ? `계획 ${M.fmtDuration(plan)}${focus > plan ? ` · 계획 대비 +${M.fmtDuration(focus - plan)}` : ''}` : null,
+        ].filter(Boolean).join(' · ');
+        return h('li.task-row.readonly', { className: `task-row readonly${done ? ' done' : ''}` },
+          h('span.check', { icon: 'check', role: 'img', 'aria-label': done ? '완료' : '미완료' }),
+          h('div.body', h('div.title', h('span', r.title || t.title)), meta ? h('div.meta', meta) : null));
+      })),
+    ) : emptyNote('이 날짜에는 할 일이 없음'),
+    st.sessions.length ? h('div.group',
+      h('h2', '집중 세션'),
+      h('ul.sessions', st.sessions.map((x) => h('li',
+        h('span.muted', `${hm(x.startedAt)}–${hm(x.endedAt)}`),
+        h('span.s-title', x.title || '할 일 없이'),
+        h('span', `${M.fmtDuration(x.actualMs)}${x.overMs > 0 ? ` (+${M.fmtDuration(x.overMs)})` : ''}`),
+      ))),
+    ) : null,
+  ];
 }
 
 // ---------- settings ----------

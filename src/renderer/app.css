@@ -270,17 +270,42 @@ input[type="range"] { width: 100%; accent-color: var(--text-2); margin: 0; heigh
 .list-row .title { font-size: 14px; }
 .plain-list.dim .title, .done-text { color: var(--text-3); }
 
-.history { display: flex; gap: 32px; align-items: flex-start; padding: 28px 32px 40px; overflow-y: auto; }
-.history > .panel { flex: 1 1 0; min-width: 0; }
-.history > .panel:first-child { flex: 1.3 1 0; }
-table.hist { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
-table.hist th { text-align: left; font-weight: 500; color: var(--text-3); font-size: 12px; padding: 6px 10px; }
-table.hist td, table.hist th { white-space: nowrap; }
-table.hist td { padding: 8px 10px; }
-table.hist tbody tr { cursor: pointer; }
-table.hist tbody tr:hover td, table.hist tbody tr.on td { background: var(--field); }
-table.hist tbody tr td:first-child { border-radius: 8px 0 0 8px; }
-table.hist tbody tr td:last-child { border-radius: 0 8px 8px 0; }
+/* history: week groups of day rows; numbers right-aligned, never wrapped */
+.hist-list { container-type: inline-size; align-self: stretch; } /* containment: width must not come from content */
+.day-cols, .day-row { display: grid; grid-template-columns: 96px minmax(0, 1fr) 52px 84px; gap: 12px; align-items: center; padding: 0 10px; }
+.day-cols { font-size: 12px; color: var(--text-3); margin-bottom: -12px; }
+.day-list { display: flex; flex-direction: column; gap: 2px; }
+.day-row {
+  width: 100%; height: 40px; border: none; border-radius: 10px; background: none; color: var(--text-1);
+  text-align: left; font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.day-row:hover, .day-row.selected { background: var(--field); }
+.day-row.selected { box-shadow: inset 0 0 0 1px var(--track); }
+.day-row.idle { color: var(--text-3); }
+.c-date { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.c-date .d { min-width: 38px; font-family: var(--font-num); font-weight: 500; }
+.c-date .w, .c-date .today-tag { font-size: 12px; color: var(--text-3); }
+.c-focus { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.c-focus .v { flex: none; width: 72px; font-family: var(--font-num); }
+.fbar { flex: 1; max-width: 160px; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+.fbar i { display: block; height: 100%; background: var(--text-3); }
+.c-done, .c-diff { text-align: right; font-family: var(--font-num); }
+.day-cols .c-focus .v, .day-cols .c-done, .day-cols .c-diff { font-family: var(--font-sans); }
+.empty-run { height: 40px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; color: var(--text-4); font-variant-numeric: tabular-nums; }
+.week-head { display: flex; justify-content: space-between; gap: 12px; }
+.week-sum { font-weight: 400; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@container (max-width: 400px) {
+  .day-cols, .day-row { grid-template-columns: 96px minmax(0, 1fr) 52px; }
+  .c-diff { display: none; }
+}
+@container (max-width: 300px) {
+  .day-cols, .day-row { grid-template-columns: 96px minmax(0, 1fr); }
+  .c-done { display: none; }
+}
+.day-card { gap: 16px; }
+.stats.in-card { padding: 0; }
+.task-row.readonly { cursor: default; }
+.task-row.readonly:hover { background: none; }
 
 .settings { padding: 28px 32px 40px; overflow-y: auto; }
 .settings > div { max-width: 640px; display: flex; flex-direction: column; gap: 32px; }
@@ -291,7 +316,7 @@ kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; 
 .warn-text { color: var(--danger); font-size: 12px; }
 
 @media (max-width: 1000px) {
-  .today, .split, .history { flex-direction: column; }
+  .today, .split { flex-direction: column; }
   .side-col { position: static; max-width: none; width: 100%; }
   .side-col > h2 { padding-top: 0; }
 }

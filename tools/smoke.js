@@ -180,6 +180,32 @@ async function run({ store, timer, dispatch, getWins, quit }) {
     check('manual goal progress steps up', s.goals[goalCount].progress === 1);
     await js(mainWin, `view.goal=null; render();`);
 
+    // History: day rows, folded empty days, detail for the clicked day, open that day.
+    const yest = M.addDays(today, -1);
+    await js(mainWin, `view.tab='history'; view.histDay=null; render();`);
+    await wait(250);
+    check('history lists days and folds empty runs',
+      await js(mainWin, `document.querySelectorAll('.day-row').length >= 7 && document.querySelectorAll('.empty-run').length >= 1`));
+    await js(mainWin, `document.querySelector('.day-row[data-day="${yest}"]').click()`);
+    await wait(250);
+    check('history detail shows the clicked day',
+      await js(mainWin, `document.querySelector('.side-col h2').textContent.includes(${JSON.stringify(M.periodLabel('day', yest))}) && document.querySelectorAll('.side-col .task-row.done').length >= 1`));
+    await shot(mainWin, 'main-history-day');
+    const rowsFit = `[...document.querySelectorAll('.day-row')].every((r) => r.offsetHeight <= 40 && r.scrollWidth <= r.clientWidth + 1)`;
+    mainWin.setBounds({ ...mainWin.getBounds(), width: 900 });
+    await wait(400);
+    check('history rows stay on one line at minimum window width', await js(mainWin, rowsFit));
+    await shot(mainWin, 'main-history-narrow');
+    await js(mainWin, `document.querySelector('.hist-list').style.setProperty('width', '340px')`);
+    await wait(200);
+    check('history drops columns instead of wrapping in a narrow list',
+      await js(mainWin, `${rowsFit} && getComputedStyle(document.querySelector('.day-row .c-diff')).display === 'none'`));
+    mainWin.setBounds({ ...mainWin.getBounds(), width: 1180 });
+    await js(mainWin, `render(); [...document.querySelectorAll('.side-col .btn')].find((b) => b.textContent === '이 날짜 열기').click()`);
+    await wait(250);
+    check('history opens the day on the today screen', await js(mainWin, `view.tab === 'today' && view.date === '${yest}'`));
+    await js(mainWin, `view.date=null; view.histDay=null;`);
+
     await js(mainWin, `view.tab='today'; view.edit=S.tasks[0].id; render();`);
     await wait(350);
     await shot(mainWin, 'main-edit');
