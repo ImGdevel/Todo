@@ -4,16 +4,29 @@
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
   <title>빠른 추가</title>
+  <link rel="stylesheet" href="tokens.css">
   <link rel="stylesheet" href="quick.css">
 </head>
 <body>
   <form class="box" id="form">
     <div class="row">
-      <span class="plus" aria-hidden="true">+</span>
-      <input id="text" type="text" autocomplete="off" maxlength="300" placeholder="오늘 할 일 입력 후 Enter" aria-label="할 일">
-      <label class="routine"><input type="checkbox" id="routine"> 매일 반복</label>
+      <svg class="plus" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
+      <div class="field">
+        <div class="mirror" id="mirror" aria-hidden="true"></div>
+        <input id="text" type="text" autocomplete="off" spellcheck="false" maxlength="300" placeholder="할 일 추가" aria-label="할 일" aria-describedby="preview">
+      </div>
     </div>
-    <div class="hint" id="hint">/10쪽 목표량 · @14:30 일정 · Esc 닫기</div>
+    <div class="preview" id="preview" aria-live="polite" hidden>
+      <div class="p-title" id="p-title"></div>
+      <div class="p-meta" id="p-meta"></div>
+    </div>
+    <div class="foot">
+      <span id="example">예: 단어 외우기 <b>/50개</b> <b>@21:00</b></span>
+      <span id="enter" hidden><kbd>↵</kbd><span id="enter-label">오늘에 추가</span></span>
+      <span class="grow"></span>
+      <label class="routine"><input type="checkbox" id="routine"> 매일 반복</label>
+      <span><kbd>Esc</kbd>닫기</span>
+    </div>
   </form>
   <script src="../shared/model.js"></script>
   <script src="quick.js"></script>

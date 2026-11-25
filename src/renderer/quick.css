@@ -1,30 +1,28 @@
-:root {
-  color-scheme: dark;
-  --bg: #1c2023;
-  --line: #3a4247;
-  --text: #eceff1;
-  --muted: #8e989f;
-  --accent: #2fbf83;
-}
-@media (prefers-color-scheme: light) {
-  :root { color-scheme: light; --bg: #ffffff; --line: #cfd5d1; --text: #1a1e20; --muted: #68727a; --accent: #178f5f; }
-}
+/* Quick add v0.3: input line, a preview of what will be created, a keycap line. */
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
-body {
-  padding: 8px;
-  font: 14px/1.4 "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-  color: var(--text);
-}
+[hidden] { display: none !important; }
+html, body { margin: 0; background: transparent; overflow: hidden; }
+body { padding: 8px 8px 24px; color: var(--text-1); font: 14px/1.43 var(--font-sans); -webkit-font-smoothing: antialiased; }
 .box {
-  height: 100%; margin: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px;
-  background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  margin: 0; border-radius: 16px; background: var(--plate); overflow: hidden;
+  box-shadow: 0 0 0 1px var(--keyline), 0 8px 20px var(--shadow);
 }
-.row { display: flex; align-items: center; gap: 10px; }
-.plus { color: var(--accent); font-size: 22px; font-weight: 600; line-height: 1; }
-#text { flex: 1; min-width: 0; border: none; outline: none; background: none; font: inherit; font-size: 17px; color: inherit; }
-.routine { display: flex; align-items: center; gap: 5px; font-size: 13px; color: var(--muted); white-space: nowrap; cursor: pointer; }
-.routine input { accent-color: var(--accent); margin: 0; }
-.hint { font-size: 12px; color: var(--muted); padding-left: 32px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hint.ok { color: var(--accent); }
+.row { display: flex; align-items: center; gap: 12px; height: 56px; padding: 0 16px; }
+.plus { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--text-3); stroke-width: 1.5; stroke-linecap: round; }
+.field { position: relative; flex: 1; min-width: 0; height: 28px; }
+#text, .mirror { position: absolute; inset: 0; font: 18px/28px var(--font-sans); padding: 0; margin: 0; white-space: pre; letter-spacing: normal; }
+#text { width: 100%; border: none; outline: none; background: none; color: var(--text-1); caret-color: var(--text-1); }
+#text::placeholder { color: var(--text-4); }
+.mirror { color: transparent; pointer-events: none; overflow: hidden; }
+.mirror .tok { border-radius: 4px; background: var(--field); box-shadow: 0 0 0 3px var(--field); }
+.preview { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px 14px 46px; border-top: 1px solid var(--line); }
+.p-title { font-size: 14px; line-height: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.p-meta { font-size: 12px; line-height: 16px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.p-meta.added { color: var(--text-1); }
+.foot { display: flex; align-items: center; gap: 16px; height: 40px; padding: 0 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.foot > span { display: flex; align-items: center; gap: 6px; }
+.foot b { font-weight: 400; color: var(--text-1); }
+.grow { flex: 1; }
+kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 4px; background: var(--field); color: var(--text-2); font: 500 11px var(--font-num); }
+.routine { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.routine input { margin: 0; accent-color: var(--text-2); }

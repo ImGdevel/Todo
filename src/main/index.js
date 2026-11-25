@@ -19,8 +19,10 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 const IS_MAC = process.platform === 'darwin';
 const RENDERER = path.join(__dirname, '..', 'renderer');
-const OVERLAY_DEFAULT = { width: 300, height: 400 };
-const OVERLAY_MIN = { width: 240, height: 140 };
+// The overlay window is the plate plus a 12px transparent margin for its shadow.
+// Its height follows the plate (overlay:fit); the user only sets the width.
+const OVERLAY_DEFAULT = { width: 324, height: 120 };
+const OVERLAY_MIN = { width: 220, height: 64 };
 
 const SHORTCUTS = [
   { id: 'quickAdd', label: '빠른 할 일 추가', accel: 'CommandOrControl+Shift+Space' },
@@ -243,8 +245,8 @@ function showMain(tab) {
 
 function createQuick() {
   quickWin = new BrowserWindow({
-    width: 560,
-    height: 108,
+    width: 576, // 560 box + margins; height follows the box (quick:fit)
+    height: 136,
     show: false,
     frame: false,
     transparent: true,
@@ -366,8 +368,7 @@ if (!SMOKE_DIR && !app.requestSingleInstanceLock()) {
       const b = overlayWin.getBounds();
       const wa = workAreaFor(b);
       const width = Math.round(Math.max(OVERLAY_MIN.width, Math.min(Number(size.width) || b.width, wa.x + wa.width - b.x)));
-      const height = Math.round(Math.max(OVERLAY_MIN.height, Math.min(Number(size.height) || b.height, wa.y + wa.height - b.y)));
-      overlayWin.setBounds({ ...b, width, height });
+      overlayWin.setBounds({ ...b, width });
       if (size.done) { saveOverlayBounds(); commit(); }
     });
     ipcMain.on('overlay:move', (_e, pos) => {
@@ -377,6 +378,25 @@ if (!SMOKE_DIR && !app.requestSingleInstanceLock()) {
       const b = overlayWin.getBounds();
       overlayWin.setBounds({ ...b, x, y });
       if (pos.done) { saveOverlayBounds(); commit(); }
+    });
+    ipcMain.on('quick:fit', (_e, h) => {
+      if (!quickWin || quickWin.isDestroyed()) return;
+      const height = Math.round(Math.max(80, Math.min(Number(h) || 136, 400)));
+      const [w, cur] = quickWin.getSize();
+      if (height !== cur) quickWin.setSize(w, height);
+    });
+    // The renderer reports the plate height. In the lower half of the screen the bottom edge
+    // stays put (the plate grows upward); otherwise the top edge does.
+    ipcMain.on('overlay:fit', (_e, h) => {
+      if (!overlayWin || overlayWin.isDestroyed()) return;
+      const b = overlayWin.getBounds();
+      const wa = workAreaFor(b);
+      const height = Math.round(Math.max(OVERLAY_MIN.height, Math.min(Number(h) || b.height, wa.height)));
+      if (height === b.height) return;
+      const up = b.y + b.height / 2 > wa.y + wa.height / 2;
+      let y = up ? b.y + b.height - height : b.y;
+      y = Math.max(wa.y, Math.min(y, wa.y + wa.height - height));
+      overlayWin.setBounds({ ...b, y, height });
     });
     // The overlay normally never takes focus; a number input borrows it and hands it back.
     ipcMain.on('overlay:keyboard', (_e, on) => {
