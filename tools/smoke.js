@@ -38,13 +38,15 @@ function seed(store) {
   s.sessions.push({ id: 'seed', date: yest, taskId: rc.id, title: rc.title, plannedMs: 50 * 60000, actualMs: 62 * 60000, overMs: 12 * 60000, startedAt: Date.now() - 86400000, endedAt: Date.now() - 86400000 + 62 * 60000 });
 }
 
-async function run({ store, timer, dispatch, getWins, showQuick, quit }) {
+async function run({ store, timer, dispatch, getWins, quit }) {
   const out = process.env.CORNER_TODO_SMOKE;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const { mainWin, overlayWin } = getWins();
   const loaded = (w) => new Promise((r) => (w.webContents.isLoading() ? w.webContents.once('did-finish-load', r) : r()));
   await Promise.all([loaded(mainWin), loaded(overlayWin)]);
-  mainWin.setSize(1180, 800);
+  // Off screen and inactive: the user may be working on this PC while the smoke runs.
+  for (const w of [mainWin, overlayWin]) w.webContents.setAudioMuted(true);
+  mainWin.setBounds({ x: -10000, y: 0, width: 1180, height: 800 });
   mainWin.showInactive();
   await wait(1200);
   const shot = async (w, name) => fs.writeFileSync(path.join(out, `${name}.png`), (await w.webContents.capturePage()).toPNG());
@@ -155,9 +157,13 @@ async function run({ store, timer, dispatch, getWins, showQuick, quit }) {
     check('edit panel saves on change', store.findTask(s.tasks[0].id).plannedMin === 45);
     await js(mainWin, `view.edit=null; render();`);
 
-    showQuick();
-    await wait(500);
+    // Same as showQuick() but off screen and without taking focus.
     const { quickWin } = getWins();
+    quickWin.webContents.setAudioMuted(true);
+    quickWin.setPosition(-10000, 0);
+    quickWin.showInactive();
+    quickWin.webContents.send('quick:open');
+    await wait(500);
     await js(quickWin, `document.getElementById('text').value='단어장 복습 /30개 @21:00'; document.getElementById('text').dispatchEvent(new Event('input'));`);
     await wait(200);
     await shot(quickWin, 'quick');

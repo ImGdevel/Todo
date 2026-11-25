@@ -10,6 +10,15 @@ const winfocus = require('./winfocus');
 
 const SMOKE_DIR = process.env.CORNER_TODO_SMOKE || null;
 if (SMOKE_DIR) app.setPath('userData', path.join(SMOKE_DIR, 'profile'));
+// Smoke runs share the desktop with the user: windows sit off screen, never take focus,
+// stay silent and leave global shortcuts alone. Chromium must keep painting windows that
+// are off screen, or capturePage would return stale frames.
+const SMOKE_OFFSCREEN = SMOKE_DIR ? { x: -10000, y: 0 } : null;
+if (SMOKE_DIR) {
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+  app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+  app.commandLine.appendSwitch('disable-renderer-backgrounding');
+}
 
 // Windows shows this id's app name on notifications instead of "Electron".
 if (process.platform === 'win32') app.setAppUserModelId('app.cornertodo.desktop');
@@ -129,6 +138,7 @@ function placeOverlay() {
     const display = screen.getAllDisplays().find((d) => d.id === store.state.settings.displayId) || screen.getPrimaryDisplay();
     overlayWin.setBounds(cornerBounds(display));
   }
+  if (SMOKE_OFFSCREEN) overlayWin.setBounds({ ...overlayWin.getBounds(), ...SMOKE_OFFSCREEN });
 }
 
 function snapOverlay(corner) {
@@ -324,6 +334,7 @@ function buildTrayMenu() {
 // ---------- notifications ----------
 
 function notify(title, body) {
+  if (SMOKE_DIR) return;
   if (Notification.isSupported()) new Notification({ title, body, silent: true }).show();
 }
 
@@ -353,7 +364,7 @@ if (!SMOKE_DIR && !app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     const base = app.getPath('userData');
-    winfocus.init();
+    if (!SMOKE_DIR) winfocus.init();
     logger.init(base);
     store.load(base);
     timer.reset();
@@ -424,6 +435,7 @@ if (!SMOKE_DIR && !app.requestSingleInstanceLock()) {
       toggleTimer: () => dispatch({ type: 'timer/toggle' }),
     };
     for (const s of SHORTCUTS) {
+      if (SMOKE_DIR) continue; // reported as available; the user's own instance may hold them
       try { shortcutOk[s.id] = globalShortcut.register(s.accel, actions[s.id]); } catch { shortcutOk[s.id] = false; }
     }
 
