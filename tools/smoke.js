@@ -56,14 +56,16 @@ async function run({ store, timer, dispatch, getWins, showQuick, quit }) {
   try {
     // Renderer errors would leave the view empty.
     check('main window renders today list', await js(mainWin, 'document.querySelectorAll(".task-row").length') >= 3);
-    check('overlay renders current task', !!(await js(overlayWin, 'document.querySelector(".now-title")?.textContent')));
+    check('overlay renders current task', !!(await js(overlayWin, 'document.querySelector(".plate .name")?.textContent')));
+    check('overlay window fits the plate', Math.abs(overlayWin.getBounds().height - (await js(overlayWin, 'Math.ceil(document.getElementById("plate").getBoundingClientRect().height + 24)'))) <= 2, JSON.stringify(overlayWin.getBounds()));
 
     // Click flows through the real DOM.
-    await js(mainWin, `document.querySelector('.task-row .check').click()`);
-    await wait(300);
     const firstId = M.dayItems(s, today, today)[0].id;
+    const clickCheck = () => js(mainWin, `document.querySelector('.task-row[data-id="${firstId}"] .check').click()`);
+    await clickCheck();
+    await wait(300);
     check('check toggles completion', M.taskDone(s, store.findTask(firstId), today));
-    await js(mainWin, `document.querySelector('.task-row .check').click()`);
+    await clickCheck();
     await wait(300);
 
     // Main window keeps updating while the add field has focus (and keeps what was typed).
@@ -77,8 +79,13 @@ async function run({ store, timer, dispatch, getWins, showQuick, quit }) {
 
     dispatch({ type: 'ui/current', payload: { id: rc.id } });
     await wait(300);
-    await js(overlayWin, `document.querySelector('.prog .ib').click()`);
+    // Hover opens control mode; +1 lives there.
+    await js(overlayWin, `document.getElementById('plate').dispatchEvent(new MouseEvent('mouseenter'))`);
     await wait(300);
+    await shot(overlayWin, 'overlay-control');
+    await js(overlayWin, `[...document.querySelectorAll('.ctrl .btn')].find((b) => b.textContent.startsWith('+1')).click()`);
+    await wait(300);
+    await js(overlayWin, `document.getElementById('plate').dispatchEvent(new MouseEvent('mouseleave'))`);
     check('overlay +1 adds progress to current task', M.taskProgress(s, rc, today) === 9, `rc=${M.taskProgress(s, rc, today)}`);
 
     // Goal rollup: week goal sums RC pages over this week.
@@ -90,6 +97,8 @@ async function run({ store, timer, dispatch, getWins, showQuick, quit }) {
 
     // Timer: start on RC with a 1-minute plan, force overtime, stop, check the session.
     dispatch({ type: 'timer/start', payload: { taskId: rc.id, plannedMin: 1 } });
+    await wait(700);
+    await shot(overlayWin, 'overlay-running');
     timer.timer.runStart -= 75000; timer.timer.checkpoint -= 75000; // pretend 75 s passed
     await wait(1300);
     check('timer reports plan reached', timer.timer.planNotified === true);
@@ -108,21 +117,43 @@ async function run({ store, timer, dispatch, getWins, showQuick, quit }) {
     await wait(1500);
     check('schedule alert appears', timer.alerts.some((a) => a.taskId === meeting.id));
     await wait(400);
-    check('overlay shows schedule alert', await js(overlayWin, '!!document.querySelector(".alert")'));
+    check('overlay shows schedule alert', await js(overlayWin, '!!document.querySelector(".due")'));
 
     // Routine resets tomorrow while today stays recorded.
     check('routine starts fresh tomorrow', M.taskProgress(s, rc, M.addDays(today, 1)) === 0 && M.taskProgress(s, rc, today) > 0);
 
     await shot(overlayWin, 'overlay');
+    dispatch({ type: 'settings/set', payload: { theme: 'light' } });
+    await wait(400);
+    await shot(overlayWin, 'overlay-light');
+    dispatch({ type: 'settings/set', payload: { theme: 'dark' } });
+    const ob = overlayWin.getBounds();
+    overlayWin.setBounds({ ...ob, width: 260 });
+    await wait(600);
+    check('narrow overlay becomes a pill', await js(overlayWin, `document.getElementById('plate').classList.contains('pill')`));
+    await shot(overlayWin, 'overlay-pill');
+    overlayWin.setBounds({ ...overlayWin.getBounds(), width: ob.width });
+    await wait(300);
     await shot(mainWin, 'main-today');
+    const { nativeTheme } = require('electron');
+    const prevTheme = nativeTheme.themeSource;
+    nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? 'light' : 'dark';
+    await wait(400);
+    await shot(mainWin, 'main-today-alt-theme');
+    nativeTheme.themeSource = prevTheme;
+    await wait(300);
     for (const tab of ['goals', 'tasks', 'history', 'settings']) {
       await js(mainWin, `view.tab='${tab}'; render();`);
       await wait(350);
       await shot(mainWin, `main-${tab}`);
     }
-    await js(mainWin, `view.tab='today'; render(); openTaskDialog(S.tasks[1]);`);
+    await js(mainWin, `view.tab='today'; view.edit=S.tasks[0].id; render();`);
     await wait(350);
-    await shot(mainWin, 'main-dialog');
+    await shot(mainWin, 'main-edit');
+    await js(mainWin, `const i=document.getElementById('edit-plan'); i.value='45'; i.dispatchEvent(new Event('change'));`);
+    await wait(300);
+    check('edit panel saves on change', store.findTask(s.tasks[0].id).plannedMin === 45);
+    await js(mainWin, `view.edit=null; render();`);
 
     showQuick();
     await wait(500);
@@ -130,6 +161,11 @@ async function run({ store, timer, dispatch, getWins, showQuick, quit }) {
     await js(quickWin, `document.getElementById('text').value='단어장 복습 /30개 @21:00'; document.getElementById('text').dispatchEvent(new Event('input'));`);
     await wait(200);
     await shot(quickWin, 'quick');
+    await js(quickWin, `document.getElementById('text').value='회의 준비 @25:00'; document.getElementById('text').dispatchEvent(new Event('input'));`);
+    await wait(200);
+    check('quick add flags an unreadable time', (await js(quickWin, `document.getElementById('p-meta').textContent`)).includes('@25:00'));
+    await shot(quickWin, 'quick-invalid');
+    await js(quickWin, `document.getElementById('text').value='단어장 복습 /30개 @21:00'; document.getElementById('text').dispatchEvent(new Event('input'));`);
     await js(quickWin, `document.getElementById('form').requestSubmit()`);
     await wait(300);
     const added = s.tasks.find((t) => t.title === '단어장 복습');

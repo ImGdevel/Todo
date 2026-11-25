@@ -1,0 +1,62 @@
+/* Corner Todo design tokens (v0.3). Carbon Gray 100 / Gray 10 roles, one accent.
+   The accent means one thing only: focus-session time is flowing. Never on task progress,
+   buttons, chips, selection or the logo. See docs/design/design-system.md. */
+:root, [data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #161616;          /* sidebar, overlay backdrop */
+  --surface: #1c1c1c;     /* main content */
+  --plate-rgb: 22, 22, 22;/* overlay plate, cards (#161616) */
+  --field: #262626;       /* inputs, selected row, hover */
+  --track: #393939;       /* ring track, bar track, button border */
+  --line: #262626;        /* separators */
+  --text-1: #f4f4f4;
+  --text-2: #c6c6c6;
+  --text-3: #a8a8a8;
+  --text-4: #8d8d8d;
+  --done: #6f6f6f;
+  --chip-on: #c6c6c6;
+  --chip-on-ink: #161616;
+  --accent: #33b1ff;      /* Carbon Cyan 40 */
+  --danger: #ff8389;
+  --focus: #ffffff;
+  --keyline: rgba(255, 255, 255, 0.08);
+  --keyline-hi: rgba(255, 255, 255, 0.14);
+  --shadow: rgba(0, 0, 0, 0.4);
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f4f4f4;
+  --surface: #ffffff;
+  --plate-rgb: 255, 255, 255;
+  --field: #e8e8e8;
+  --track: #e0e0e0;
+  --line: #e0e0e0;
+  --text-1: #161616;
+  --text-2: #393939;
+  --text-3: #525252;
+  --text-4: #6f6f6f;
+  --done: #a8a8a8;
+  --chip-on: #393939;
+  --chip-on-ink: #ffffff;
+  --accent: #0072c3;      /* Carbon Cyan 60 */
+  --danger: #da1e28;
+  --focus: #0f62fe;
+  --keyline: rgba(0, 0, 0, 0.10);
+  --keyline-hi: rgba(0, 0, 0, 0.20);
+  --shadow: rgba(0, 0, 0, 0.12);
+}
+/* Windows without an explicit theme (main, quick) follow the system. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg: #f4f4f4; --surface: #ffffff; --plate-rgb: 255, 255, 255; --field: #e8e8e8; --track: #e0e0e0; --line: #e0e0e0;
+    --text-1: #161616; --text-2: #393939; --text-3: #525252; --text-4: #6f6f6f; --done: #a8a8a8;
+    --chip-on: #393939; --chip-on-ink: #ffffff; --accent: #0072c3; --danger: #da1e28; --focus: #0f62fe;
+    --keyline: rgba(0, 0, 0, 0.10); --keyline-hi: rgba(0, 0, 0, 0.20); --shadow: rgba(0, 0, 0, 0.12);
+  }
+}
+:root {
+  --font-sans: "IBM Plex Sans KR", "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-num: "IBM Plex Sans", "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+  --plate: rgb(var(--plate-rgb));
+}

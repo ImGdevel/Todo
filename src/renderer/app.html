@@ -4,23 +4,23 @@
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
   <title>Corner Todo</title>
+  <link rel="stylesheet" href="tokens.css">
   <link rel="stylesheet" href="app.css">
 </head>
 <body>
-  <header class="top">
-    <div class="brand"><span class="logo" aria-hidden="true"></span><h1>Corner Todo</h1></div>
-    <nav class="tabs" id="tabs">
-      <button type="button" data-tab="today">오늘</button>
-      <button type="button" data-tab="goals">목표</button>
-      <button type="button" data-tab="tasks">할 일·루틴</button>
-      <button type="button" data-tab="history">기록</button>
-      <button type="button" data-tab="settings">설정</button>
-    </nav>
-    <div class="top-right">
-      <div class="worktime-chip" title="오늘 누적 집중 시간"><span>Work Time</span><b id="top-work">0분</b></div>
-      <label class="toggle-row compact"><span>오버레이</span><input type="checkbox" class="switch" id="top-overlay"></label>
+  <nav class="side-nav" aria-label="주 메뉴">
+    <div class="brand"><span class="logo" aria-hidden="true"></span><span>Corner Todo</span></div>
+    <div class="nav-items" id="tabs">
+      <button type="button" data-tab="today"><span class="ni" data-icon="clock"></span>오늘<span class="count" id="nav-count"></span></button>
+      <button type="button" data-tab="goals"><span class="ni" data-icon="flag"></span>목표</button>
+      <button type="button" data-tab="tasks"><span class="ni" data-icon="repeat"></span>할 일·루틴</button>
+      <button type="button" data-tab="history"><span class="ni" data-icon="chart"></span>기록</button>
     </div>
-  </header>
+    <div class="nav-bottom">
+      <label class="nav-toggle"><span>오버레이</span><input type="checkbox" class="switch" id="top-overlay"></label>
+      <button type="button" data-tab="settings" id="nav-settings"><span class="ni" data-icon="gear"></span>설정</button>
+    </div>
+  </nav>
   <main id="view"></main>
   <dialog id="dlg"></dialog>
 

@@ -245,10 +245,12 @@
   // "영단어 외우기 /50개 @14:30" → title, target 50 개, scheduled 14:30.
   function parseQuick(text) {
     let rest = ` ${String(text || '')} `;
-    const out = { title: '', target: null, unit: '', scheduledTime: null };
-    rest = rest.replace(/\s@(\d{1,2}):?(\d{2})(?=\s)/, (_, h, m) => {
-      if (Number(h) < 24 && Number(m) < 60) out.scheduledTime = `${pad(Number(h))}:${m}`;
-      return ' ';
+    const out = { title: '', target: null, unit: '', scheduledTime: null, invalidTime: null };
+    // A time that cannot be read (@25:00) stays in the title so nothing typed is lost.
+    rest = rest.replace(/\s@(\d{1,2}):?(\d{2})(?=\s)/, (match, h, m) => {
+      if (Number(h) < 24 && Number(m) < 60) { out.scheduledTime = `${pad(Number(h))}:${m}`; return ' '; }
+      out.invalidTime = match.trim();
+      return match;
     });
     rest = rest.replace(/\s\/(\d+(?:\.\d+)?)\s*([^\s\d@/][^\s@/]*)?(?=\s)/, (_, n, u) => {
       out.target = Number(n);

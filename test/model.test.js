@@ -103,9 +103,16 @@ test('timerView counts overtime past the plan', () => {
 
 test('parseQuick extracts target and time', () => {
   assert.deepEqual(M.parseQuick('영단어 외우기 /50개 @14:30'),
-    { title: '영단어 외우기', target: 50, unit: '개', scheduledTime: '14:30' });
-  assert.deepEqual(M.parseQuick('운동 30분'), { title: '운동 30분', target: null, unit: '', scheduledTime: null });
+    { title: '영단어 외우기', target: 50, unit: '개', scheduledTime: '14:30', invalidTime: null });
+  assert.deepEqual(M.parseQuick('운동 30분'), { title: '운동 30분', target: null, unit: '', scheduledTime: null, invalidTime: null });
   assert.equal(M.parseQuick('회의 @930').scheduledTime, '09:30');
+});
+
+test('parseQuick keeps an unreadable time in the title', () => {
+  const p = M.parseQuick('회의 준비 @25:00');
+  assert.equal(p.title, '회의 준비 @25:00');
+  assert.equal(p.scheduledTime, null);
+  assert.equal(p.invalidTime, '@25:00');
 });
 
 test('dayItems puts timed items first in time order', () => {

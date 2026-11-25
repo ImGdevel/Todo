@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   overlayKeyboard: (on) => ipcRenderer.send('overlay:keyboard', !!on),
   releaseFocus: () => ipcRenderer.send('overlay:release'),
   resizeOverlay: (size) => ipcRenderer.send('overlay:resize', size),
+  fitOverlay: (height) => ipcRenderer.send('overlay:fit', height),
+  fitQuick: (height) => ipcRenderer.send('quick:fit', height),
   moveOverlay: (pos) => ipcRenderer.send('overlay:move', pos),
 });

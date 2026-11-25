@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS = {
   displayId: null,
   overlayLocked: false,
   clickThrough: false,
-  opacity: 0.88,
+  opacity: 1,
   fontScale: 1,
   theme: 'dark',
   defaultPlannedMin: 25,
